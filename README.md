@@ -62,4 +62,3 @@ A simple script to merge two LAMMPS-style dump files frame by frame. It shifts a
 
 ## License
 
-MIT
