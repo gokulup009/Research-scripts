@@ -53,6 +53,9 @@ Each folder contains scripts with docstrings and examples. For example:
 A simple script to merge two LAMMPS-style dump files frame by frame. It shifts atom IDs to avoid duplicates and can change atom types to distinguish atoms from each file.
 
 ---
+## postprocessing/dump_type.py
+
+dump_type.py processes a LAMMPS dump file and reassigns atom types based on their original type values. In the example, types ≤3200 are set to 1, type 3201 becomes 2, and all higher types become 3. This allows grouping many atom types into a smaller set for easier analysis or visualization.
 
 ## Contributing
 
