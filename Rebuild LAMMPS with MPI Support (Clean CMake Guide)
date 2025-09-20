@@ -1,1 +1,365 @@
+#### 1. CMake Local Build Instructions
+**File Name**: `cmake_local_build.md`
 
+```markdown
+# Local CMake 4.1.1 Installation for Non-Superuser (localhost2)
+
+This guide installs CMake 4.1.1 locally in `/home/gokul/.local` to resolve `cmake: command not found` and OpenSSL errors (`Could NOT find OpenSSL`), enabling LAMMPS builds without superuser privileges.
+
+## Prerequisites
+- Ensure `wget`, `make`, and a basic C/C++ compiler (e.g., `gcc`) are installed.
+- Check:
+  ```bash
+  gcc --version
+  wget --version
+  make --version
+  ```
+- If `gcc` is missing, see `gcc_local_build.md` for GCC 11.2.0 installation.
+
+## Steps
+
+1. **Download CMake**:
+   ```bash
+   cd /home/gokul/Downloads
+   wget https://github.com/Kitware/CMake/releases/download/v4.1.1/cmake-4.1.1.tar.gz
+   tar -zxvf cmake-4.1.1.tar.gz
+   cd cmake-4.1.1
+   ```
+
+2. **Clean Previous Bootstrap (if needed)**:
+   ```bash
+   rm -rf CMakeFiles CMakeCache.txt CMakeOutput.log CMakeError.log
+   ```
+
+3. **Bootstrap Without OpenSSL** (fixes `Could NOT find OpenSSL`):
+   ```bash
+   ./bootstrap --prefix=$HOME/.local -- -DCMAKE_USE_OPENSSL=OFF
+   ```
+
+4. **Build and Install**:
+   ```bash
+   make -j$(nproc)
+   make install
+   ```
+
+5. **Update PATH**:
+   ```bash
+   echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+6. **Verify Installation**:
+   ```bash
+   cmake --version
+   ```
+   Expected: `cmake version 4.1.1` or similar.
+
+## Troubleshooting
+- **Bootstrap Fails (Missing zlib)**:
+  Install zlib locally:
+  ```bash
+  cd /home/gokul/Downloads
+  wget https://zlib.net/zlib-1.3.1.tar.gz
+  tar -zxvf zlib-1.3.1.tar.gz
+  cd zlib-1.3.1
+  ./configure --prefix=$HOME/.local
+  make -j$(nproc)
+  make install
+  export CPPFLAGS="-I$HOME/.local/include" LDFLAGS="-L$HOME/.local/lib"
+  ```
+  Re-run bootstrap.
+- **Other Dependencies** (e.g., ncurses, libcurl):
+  Install locally if needed (e.g., `ncurses`):
+  ```bash
+  cd /home/gokul/Downloads
+  wget https://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.4.tar.gz
+  tar -zxvf ncurses-6.4.tar.gz
+  cd ncurses-6.4
+  ./configure --prefix=$HOME/.local
+  make -j$(nproc)
+  make install
+  ```
+- **OpenSSL Needed** (if HTTPS downloads are required):
+  ```bash
+  cd /home/gokul/Downloads
+  wget https://www.openssl.org/source/openssl-3.0.14.tar.gz
+  tar -zxvf openssl-3.0.14.tar.gz
+  cd openssl-3.0.14
+  ./Configure --prefix=$HOME/.local/openssl --openssldir=$HOME/.local/openssl shared zlib
+  make -j$(nproc)
+  make install
+  export OPENSSL_ROOT_DIR=$HOME/.local/openssl
+  export LD_LIBRARY_PATH=$HOME/.local/openssl/lib:$LD_LIBRARY_PATH
+  echo 'export OPENSSL_ROOT_DIR=$HOME/.local/openssl' >> ~/.bashrc
+  echo 'export LD_LIBRARY_PATH=$HOME/.local/openssl/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+  ```
+  Re-run bootstrap without `-DCMAKE_USE_OPENSSL=OFF`.
+
+## Notes
+- Disabling OpenSSL (`-DCMAKE_USE_OPENSSL=OFF`) is sufficient for LAMMPS builds.
+- Ensure `$HOME/.local/bin` is in `PATH` for subsequent steps.
+```
+
+#### 2. LAMMPS Local Build Instructions
+**File Name**: `lammps_local_build.md`
+
+```markdown
+# Local LAMMPS 22Jul2025 Build for Non-Superuser (localhost2)
+
+This guide builds LAMMPS 22Jul2025 with MPI and MOLECULE package in `/home/gokul/Downloads/lammps_2025/lammps-22Jul2025` for parallel runs of `in.polymers_100x10`, addressing auto-generated file errors (`packages_ntopo.h`, `lmpgitversion.h`).
+
+## Prerequisites
+- CMake installed locally (see `cmake_local_build.md`).
+- MPI (e.g., OpenMPI) for parallel runs:
+  ```bash
+  mpicc --version
+  mpicxx --version
+  ```
+  If missing, install OpenMPI locally:
+  ```bash
+  cd /home/gokul/Downloads
+  wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.6.tar.gz
+  tar -zxvf openmpi-4.1.6.tar.gz
+  cd openmpi-4.1.6
+  ./configure --prefix=$HOME/.local
+  make -j$(nproc)
+  make install
+  echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+  source ~/.bashrc
+  ```
+
+## Steps
+
+1. **Clean Auto-Generated Files** (fixes CMake errors):
+   ```bash
+   cd /home/gokul/Downloads/lammps_2025/lammps-22Jul2025/src
+   make purge
+   # Or manual:
+   rm style_*.h packages_*.h lmpgitversion.h
+   ```
+
+2. **Configure and Build**:
+   ```bash
+   cd /home/gokul/Downloads/lammps_2025/lammps-22Jul2025
+   mkdir -p build && cd build
+   cmake -D BUILD_MPI=ON -D CMAKE_C_COMPILER=mpicc -D CMAKE_CXX_COMPILER=mpicxx -D PKG_MOLECULE=ON -D CMAKE_INSTALL_PREFIX=$HOME/.local ../cmake
+   make -j$(nproc)
+   make install
+   ```
+
+3. **Update PATH**:
+   ```bash
+   echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+4. **Verify Installation**:
+   ```bash
+   lmp -h
+   ```
+   Expected: `Large-scale Atomic/Molecular Massively Parallel Simulator - 22 Jul 2025 - Update 1`.
+
+5. **Test Parallel Run**:
+   ```bash
+   cd /home/gokul/Downloads/polymers
+   mpirun -np 4 lmp -in in.polymers_100x10
+   cat /home/gokul/Downloads/polymers/log.lammps
+   ```
+   Look for: `Running on 4 processors`.
+
+6. **Test Script (if needed)**:
+   Save as `/home/gokul/Downloads/polymers/test_parallel.in`:
+   ```lammps
+   # test_parallel.in
+   units lj
+   atom_style molecular
+   region box block 0 20 0 20 0 20
+   create_box 2 box
+   create_atoms 1 single 10 10 10
+   create_atoms 2 single 11 10 10
+   mass 1 12.0
+   mass 2 16.0
+   pair_style lj/cut 10.0
+   pair_coeff 1 1 0.112 3.4
+   pair_coeff 1 2 0.1 3.5
+   pair_coeff 2 2 0.09 3.6
+   bond_style harmonic
+   bond_coeff 1 100.0 1.0
+   create_bonds single/bond 1 1 2
+   fix 1 all nve
+   log log.test
+   run 100
+   ```
+   Run:
+   ```bash
+   mpirun -np 4 lmp -in test_parallel.in
+   cat /home/gokul/Downloads/polymers/log.test
+   ```
+
+## Troubleshooting
+- **CMake Fails (Missing MPI)**: Ensure OpenMPI is installed (see Prerequisites).
+- **in.polymers_100x10 Errors**: Add packages (e.g., `-D PKG_MANYBODY=ON -D PKG_KSPACE=ON`), rebuild, and retry.
+- **Potential Files**: Place `SiC_1994.tersoff` in `/home/gokul/.local/share/lammps/potentials`.
+- **Lingering Processes**:
+  ```bash
+  ps aux | grep lmp
+  killall lmp
+  ```
+
+## Notes
+- Disable OpenMP if needed: `export OMP_NUM_THREADS=1`.
+- Successful `lmp -h` confirms installation.
+```
+
+#### 3. GCC 11.2.0 Local Build Instructions
+**File Name**: `gcc_local_build.md`
+
+```markdown
+# Local GCC 11.2.0 Build for Non-Superuser (localhost2)
+
+This guide installs GCC 11.2.0 locally in `/home/gokul/.local` for use with CMake and LAMMPS builds, addressing potential compiler compatibility issues.
+
+## Prerequisites
+- Basic build tools (`make`, `wget`).
+- Check:
+  ```bash
+  make --version
+  wget --version
+  ```
+- Existing compiler (e.g., system `gcc`). If missing, contact your system admin.
+
+## Steps
+
+1. **Download GCC**:
+   ```bash
+   cd /home/gokul/Downloads
+   wget https://ftp.gnu.org/gnu/gcc/gcc-11.2.0/gcc-11.2.0.tar.gz
+   tar -zxvf gcc-11.2.0.tar.gz
+   cd gcc-11.2.0
+   ```
+
+2. **Install Dependencies** (GMP, MPFR, MPC):
+   ```bash
+   cd /home/gokul/Downloads
+   # GMP
+   wget https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz
+   tar -xvf gmp-6.2.1.tar.xz
+   cd gmp-6.2.1
+   ./configure --prefix=$HOME/.local
+   make -j$(nproc)
+   make install
+   # MPFR
+   cd /home/gokul/Downloads
+   wget https://www.mpfr.org/mpfr-current/mpfr-4.1.0.tar.xz
+   tar -xvf mpfr-4.1.0.tar.xz
+   cd mpfr-4.1.0
+   ./configure --prefix=$HOME/.local --with-gmp=$HOME/.local
+   make -j$(nproc)
+   make install
+   # MPC
+   cd /home/gokul/Downloads
+   wget https://ftp.gnu.org/gnu/mpc/mpc-1.2.1.tar.gz
+   tar -zxvf mpc-1.2.1.tar.gz
+   cd mpc-1.2.1
+   ./configure --prefix=$HOME/.local --with-gmp=$HOME/.local --with-mpfr=$HOME/.local
+   make -j$(nproc)
+   make install
+   ```
+
+3. **Configure and Build GCC**:
+   ```bash
+   cd /home/gokul/Downloads/gcc-11.2.0
+   mkdir build && cd build
+   ../configure --prefix=$HOME/.local --disable-multilib --enable-languages=c,c++ --with-gmp=$HOME/.local --with-mpfr=$HOME/.local --with-mpc=$HOME/.local
+   make -j$(nproc)
+   make install
+   ```
+
+4. **Update PATH**:
+   ```bash
+   echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+   echo 'export LD_LIBRARY_PATH=$HOME/.local/lib:$HOME/.local/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+5. **Verify Installation**:
+   ```bash
+   $HOME/.local/bin/gcc --version
+   ```
+   Expected: `gcc (GCC) 11.2.0`.
+
+## Troubleshooting
+- **Configure Fails**: Ensure GMP, MPFR, MPC are installed correctly.
+- **Library Errors**: Add `$HOME/.local/lib` and `$HOME/.local/lib64` to `LD_LIBRARY_PATH`.
+- **Use with CMake/LAMMPS**:
+  ```bash
+  export CC=$HOME/.local/bin/gcc
+  export CXX=$HOME/.local/bin/g++
+  ```
+  Then re-run CMake bootstrap or LAMMPS build.
+
+## Notes
+- GCC 11.2.0 is stable and compatible with CMake 4.1.1 and LAMMPS 22Jul2025.
+- Build time may be significant; ensure sufficient disk space (~5-10 GB).
+```
+
+### Setting Up a GitHub Repository
+To store these instructions for future reference:
+
+1. **Create a Repository**:
+   - Go to [github.com](https://github.com), sign in, or create an account.
+   - Click “New repository”, name it (e.g., `lammps-build-instructions`), set to private or public, and initialize with a README.
+
+2. **Add Files**:
+   - **Via Web Interface**:
+     - Click “Add file” > “Create new file”.
+     - Create `cmake_local_build.md`, `lammps_local_build.md`, and `gcc_local_build.md`.
+     - Copy and paste the respective Markdown content above into each file.
+     - Commit with messages like “Add CMake build instructions”.
+   - **Via Git Locally**:
+     ```bash
+     cd /home/gokul/Downloads
+     mkdir lammps-build-instructions
+     cd lammps-build-instructions
+     # Save each Markdown block (e.g., nano cmake_local_build.md)
+     git init
+     git add cmake_local_build.md lammps_local_build.md gcc_local_build.md
+     git commit -m "Add build instructions"
+     git remote add origin <repository-url>
+     git push -u origin main
+     ```
+
+3. **Access Anywhere**:
+   - View files on GitHub’s web interface or clone:
+     ```bash
+     git clone <repository-url>
+     ```
+
+### Creating a PDF (Optional)
+To create PDFs for each file:
+1. Copy each Markdown file’s content into a Google Doc at [drive.google.com](https://drive.google.com).
+2. Download as PDF: `File` > `Download` > `PDF Document`.
+3. Upload PDFs to Google Drive in a folder (e.g., “LAMMPS Instructions”).
+4. Alternatively, use a Markdown-to-PDF tool like Pandoc (if available):
+   ```bash
+   pandoc cmake_local_build.md -o cmake_local_build.pdf
+   ```
+
+### Notes
+- **Errors Handled**: 
+  - `cmake: command not found` is resolved by local CMake installation.
+  - OpenSSL error is bypassed with `-DCMAKE_USE_OPENSSL=OFF`.
+  - GCC 11.2.0 is included for compiler issues (e.g., if `mpicc`/`mpicxx` fails).
+- **LAMMPS Success**: Your `lmp -h` output confirms the build worked. Focus on testing parallel runs.
+- **Potential Files**: Ensure `SiC_1994.tersoff` is in `/home/gokul/.local/share/lammps/potentials`.
+- **Troubleshooting**:
+  - If `mpirun` fails:
+    ```bash
+    mpirun -np 4 hostname
+    ```
+  - If `in.polymers_100x10` fails, share the error or script.
+  - Clear processes:
+    ```bash
+    ps aux | grep lmp
+    killall lmp
+    ```
